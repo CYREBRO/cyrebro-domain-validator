@@ -8,7 +8,7 @@ setup(
     description='A domain validation package, written by CYREBRO\'s Innovation team.',
     long_description=open('README.md', 'r').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/pypa/cyrebro_domain_validator',
+    url='https://github.com/CYREBRO/cyrebro-domain-validator',
     license='MIT',
     packages=find_packages(),
     install_requires=[
