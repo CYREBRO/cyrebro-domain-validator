@@ -4,14 +4,14 @@ import socket
 
 from dns import resolver
 from tld import get_tld, is_tld
+from json import dumps
 
 from requests.exceptions import ConnectionError
 from socket import gaierror
 
 
 class DomainValidator:
-    def __init__(self, domain_name: str, dkim_selector: str = None, raw_data=False):
-        self.raw_data = raw_data
+    def __init__(self, domain_name: str, dkim_selector: str = None):
         self._domain_name = domain_name
         self._domain_tld = self._get_domain_tld()
         self._dkim_selector = dkim_selector
@@ -25,6 +25,20 @@ class DomainValidator:
 
         self._validate_domain()
 
+    def __bool__(self):
+        if any([
+            self._regex_result,
+            self._http_result,
+            self._https_result,
+            self._dkim_results,
+            self._spf_results,
+            self._nslookup_results,
+            self._whois_results
+        ]):
+            return True
+
+        return False
+
     def __dict__(self):
         return {
             "regex": self._regex_result,
@@ -37,27 +51,13 @@ class DomainValidator:
         }
 
     @property
+    def json(self):
+        return dumps(self.__dict__())
+
+    @property
     def _domain_reg(self):
         return re.compile(
             r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9.]$")
-
-    @property
-    def results(self):
-        if self.raw_data:
-            return self.__dict__()
-
-        elif any([
-            self._regex_result,
-            self._http_result,
-            self._https_result,
-            self._dkim_results,
-            self._spf_results,
-            self._nslookup_results,
-            self._whois_results
-        ]):
-            return True
-
-        return False
 
     def _get_domain_tld(self):
         return get_tld(f"https://{self._domain_name}", fail_silently=True)
@@ -108,9 +108,11 @@ class DomainValidator:
                 for response in results:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
+                        return
             except (resolver.NXDOMAIN, resolver.NoAnswer):
                 self._query_common_dkim_selectors()
-
+                return
+        self._query_common_dkim_selectors()
         return
 
     def _query_common_dkim_selectors(self):
@@ -133,7 +135,7 @@ class DomainValidator:
             resolver_response = str(resolver.resolve(self._domain_name, 'TXT').response)
             if "v=spf1" in resolver_response:
                 self._spf_results = True
-        except (resolver.NXDOMAIN, resolver.NoAnswer):
+        except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.LifetimeTimeout):
             pass
 
         return
@@ -144,3 +146,4 @@ class DomainValidator:
         self._nslookup_validator()
         self._whois_validator()
         self._dkim_validator()
+        self._spf_validator()
