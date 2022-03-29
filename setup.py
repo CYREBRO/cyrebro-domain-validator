@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cyrebro_domain_validator',
-    version='0.1.8',
+    version='0.2.0',
     author='CYREBRO Innovation',
     author_email='innovation@cyrebro.io',
     description='A domain validation package, written by CYREBRO\'s Innovation team.',
