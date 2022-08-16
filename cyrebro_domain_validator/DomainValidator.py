@@ -5,6 +5,7 @@ import socket
 from dns import resolver
 from tld import get_tld, is_tld
 from json import dumps
+from typing import Tuple
 
 from requests.exceptions import ConnectionError
 from socket import gaierror
@@ -109,7 +110,8 @@ class DomainValidator:
         """
         unavailable_domain_str = f"You queried for {self._domain_name} but this server does not have\n% any data for " \
                                  f"{self._domain_name}."
-        response = requests.get(f"https://www.iana.org/whois?q={self._domain_name}").text
+        response = requests.get(
+            f"https://www.iana.org/whois?q={self._domain_name}").text
         if unavailable_domain_str not in response:
             self._whois_results = True
 
@@ -135,7 +137,7 @@ class DomainValidator:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
                         return
-            except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers):
+            except (resolver.NXDOMAIN, resolver.NoAnswer):
                 self._query_common_dkim_selectors()
                 return
         self._query_common_dkim_selectors()
@@ -150,11 +152,12 @@ class DomainValidator:
         ]
         for selector in default_dkim_selectors:
             try:
-                results = resolver.resolve(f"{selector}._domainkey.{self._domain_name}", "TXT").response.answer
+                results = resolver.resolve(
+                    f"{selector}._domainkey.{self._domain_name}", "TXT").response.answer
                 for response in results:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
-            except (resolver.NXDOMAIN, resolver.NoAnswer):
+            except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers):
                 continue
 
     def _spf_validator(self):
@@ -163,7 +166,8 @@ class DomainValidator:
         Unlike DKIM, no selectors are needed and we can query the DNS server regularly.
         """
         try:
-            resolver_response = str(resolver.resolve(self._domain_name, 'TXT').response)
+            resolver_response = str(resolver.resolve(
+                self._domain_name, 'TXT').response)
             if "v=spf1" in resolver_response:
                 self._spf_results = True
         except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.LifetimeTimeout):
@@ -181,7 +185,7 @@ class DomainValidator:
         self._spf_validator()
 
 
-def validate_domain(domain_name: str, dkim_selector: str = None, raw_data=False) -> (bool, dict):
+def validate_domain(domain_name: str, dkim_selector: str = None, raw_data=False) -> Tuple[bool, dict]:
     """
     This function is used to allow the users to get the results without handling with the object itself.
     :param domain_name: The name of the domain - mandatory.
