@@ -135,7 +135,7 @@ class DomainValidator:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
                         return
-            except (resolver.NXDOMAIN, resolver.NoAnswer):
+            except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers):
                 self._query_common_dkim_selectors()
                 return
         self._query_common_dkim_selectors()
