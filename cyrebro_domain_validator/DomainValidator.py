@@ -137,7 +137,7 @@ class DomainValidator:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
                         return
-            except (resolver.NXDOMAIN, resolver.NoAnswer):
+            except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers, resolver.LifetimeTimeout):
                 self._query_common_dkim_selectors()
                 return
         self._query_common_dkim_selectors()
@@ -157,7 +157,7 @@ class DomainValidator:
                 for response in results:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
-            except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers):
+            except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers, resolver.LifetimeTimeout):
                 continue
 
     def _spf_validator(self):
@@ -170,7 +170,7 @@ class DomainValidator:
                 self._domain_name, 'TXT').response)
             if "v=spf1" in resolver_response:
                 self._spf_results = True
-        except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.LifetimeTimeout):
+        except (resolver.NXDOMAIN, resolver.NoAnswer, resolver.NoNameservers, resolver.LifetimeTimeout):
             pass
 
         return
