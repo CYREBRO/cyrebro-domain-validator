@@ -1,3 +1,3 @@
-from .DomainValidator import DomainValidator, validate_domain
+from .domain_validator import DomainValidator, validate_domain
 
-__all__ = ["DomainValidator", "validate_domain"]
+__all__ = ["domain_validator", "validate_domain"]

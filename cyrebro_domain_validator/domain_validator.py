@@ -31,7 +31,7 @@ class DomainValidator:
 
     def __init__(self, domain_name: str, dkim_selector: str = None):
         self._domain_name = domain_name
-        self._domain_tld = self.get_domain_tld()
+        self._domain_tld = self.get_domain_tld(self._domain_name)
         self._dkim_selector = dkim_selector
         self._regex_result = False
         self._http_result = False
@@ -57,19 +57,25 @@ class DomainValidator:
             ]
         )
 
-    def to_dict(self) -> dict:
-        return {
-            "regex": self._regex_result,
-            "http": self._http_result,
-            "https": self._https_result,
-            "nslookup": self._nslookup_results,
-            "whois": self._whois_results,
-            "dkim": self._dkim_results,
-            "spf": self._spf_results,
-        }
+    @staticmethod
+    def get_domain_tld(domain_name: str):
+        return get_tld(f"https://{domain_name}", fail_silently=True)
 
-    def get_domain_tld(self):
-        return get_tld(f"https://{self._domain_name}", fail_silently=True)
+    @staticmethod
+    def _http_validator(domain_name) -> bool:
+        try:
+            requests.get(f"http://{domain_name}")
+            return True
+        except ConnectionError:
+            return False
+
+    @staticmethod
+    def _https_validator(domain_name) -> bool:
+        try:
+            requests.get(f"https://{domain_name}")
+            return True
+        except ConnectionError:
+            return False
 
     def _regex_validator(self) -> None:
         """
@@ -77,25 +83,19 @@ class DomainValidator:
         The "is_tld" function from the tld package uses a list of known TLDs which can be found here:
         https://github.com/barseghyanartur/tld/blob/b4a741f9abbd0aca472ac33badb0b08752e48b67/src/tld/res/effective_tld_names.dat.txt
         """
-        if self._domain_tld:
-            if self._domain_regex.fullmatch(self._domain_name) and is_tld(
-                self._domain_tld
-            ):
-                self._regex_result = True
-        return
+        if not self._domain_tld:
+            return
+
+        if self._domain_regex.fullmatch(self._domain_name) and is_tld(self._domain_tld):
+            self._regex_result = True
 
     def _web_validator(self) -> None:
         """Simple HTTP and HTTPs connectivity checks."""
-        try:
-            requests.get(f"http://{self._domain_name}")
+        if self._http_validator(self._domain_name):
             self._http_result = True
-        except ConnectionError:
-            pass
-        try:
-            requests.get(f"https://{self._domain_name}")
+
+        if self._https_validator(self._domain_name):
             self._https_result = True
-        except ConnectionError:
-            pass
 
     def _nslookup_validator(self) -> None:
         """Simple nslookup check, this is used to determine if the domain name translates to an IP address."""
@@ -191,6 +191,17 @@ class DomainValidator:
         ):
             pass
 
+    def to_dict(self) -> dict:
+        return {
+            "regex": self._regex_result,
+            "http": self._http_result,
+            "https": self._https_result,
+            "nslookup": self._nslookup_results,
+            "whois": self._whois_results,
+            "dkim": self._dkim_results,
+            "spf": self._spf_results,
+        }
+
     def validate_domain(self):
         """Main class execution function."""
         self._regex_validator()
@@ -218,5 +229,4 @@ def validate_domain(
     dv.validate_domain()
     if not raw_data:
         return True if dv else False
-    else:
-        return dv.to_dict()
+    return dv.to_dict()
