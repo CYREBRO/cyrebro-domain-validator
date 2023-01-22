@@ -51,7 +51,7 @@ The dependencies will be installed automatically once installing the package.
 #### Using The Package
 CYREBRO's Domain Validator allows you to receive the scan results in both boolean expression and dictionary formats.
 ###### Importing
-```from DomainValidator import validate_domain```
+```from cyrebro_domain_validator import DomainValidator, validate_domain```
 ###### Basic Usage
 The basic usage will provide you with a simple **True** or **False** answer, it allows for easy check within a condition.</br>
 The function will return **True** if the answer is positive for ***one*** of the validity checks mentioned above.  
