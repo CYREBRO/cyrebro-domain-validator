@@ -9,6 +9,7 @@ from tld import get_tld, is_tld
 
 from requests.exceptions import ConnectionError
 from socket import gaierror
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 class DomainValidator:
@@ -105,6 +106,7 @@ class DomainValidator:
         except gaierror:
             pass
 
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(20))
     def _whois_validator(self) -> None:
         """
         To easily validate if the domain has a valid WHOIS data, we use query IANA's WHOIS service to look for
