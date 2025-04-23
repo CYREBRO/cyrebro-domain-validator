@@ -11,7 +11,7 @@ setup(
     url="https://github.com/CYREBRO/cyrebro-domain-validator",
     license="MIT",
     packages=find_packages(),
-    install_requires=["requests", "dnspython>=2.2.1", "tld>=0.12.6"],
+    install_requires=["requests", "dnspython>=2.2.1", "tld>=0.12.6", "tenacity"],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
