@@ -29,10 +29,8 @@ pip install cyrebro-domain-validator
 Firstly, clone the repository and extract the files. </br>
 Export the files and navigate to the directory using the terminal/command line window. </br>
 Lastly, once in an activated venv, enter the following command in the terminal/command line window:
-###### Windows
-```python .\setup.py install```
-###### Linux
-```python3 ./setup.py install```
+###### Windows / Lunux
+```pip install -e .```
 
 ##### Dependencies
 * [dnspython](https://github.com/rthalley/dnspython) by [rthalley](https://github.com/rthalley). </br>

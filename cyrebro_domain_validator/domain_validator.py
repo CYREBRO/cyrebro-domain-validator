@@ -1,23 +1,31 @@
+"""DomainValidator class for validating domain names and their associated records."""
+
+from __future__ import annotations
+
 import re
-import requests
 import socket
-
-from typing import Tuple
-
-from dns import resolver
-from tld import get_tld, is_tld
-
-from requests.exceptions import ConnectionError
 from socket import gaierror
+from typing import TYPE_CHECKING, ClassVar
+
+import requests
+from dns import resolver
+from dns.rrset import RRset
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from tenacity import retry, stop_after_attempt, wait_fixed
+from tld import Result, get_tld, is_tld
+
+if TYPE_CHECKING:
+    from dns.rrset import RRset
 
 
 class DomainValidator:
-    _domain_regex = re.compile(
-        r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9.]$"
+    """DomainValidator class for validating domain names and their associated records."""
+
+    _domain_regex: re.Pattern[str] = re.compile(
+        pattern=r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9.]$",
     )
 
-    default_dkim_selectors = [
+    default_dkim_selectors: ClassVar[list[str]] = [
         "google",
         "dkim",
         "mail",
@@ -30,10 +38,11 @@ class DomainValidator:
         "mxvault",
     ]
 
-    def __init__(self, domain_name: str, dkim_selector: str = None):
-        self._domain_name = domain_name
-        self._domain_tld = self.get_domain_tld(self._domain_name)
-        self._dkim_selector = dkim_selector
+    def __init__(self, domain_name: str, dkim_selector: str | None = None) -> None:
+        """Initialize the DomainValidator class."""
+        self._domain_name: str = domain_name
+        self._domain_tld: str | Result | None = self.get_domain_tld(domain_name=self._domain_name)
+        self._dkim_selector: str | None = dkim_selector
         self._regex_result = False
         self._http_result = False
         self._https_result = False
@@ -43,9 +52,7 @@ class DomainValidator:
         self._whois_results = False
 
     def __bool__(self) -> bool:
-        """
-        :return: True if ONE of the validity checks were successful.
-        """
+        """:return: True if ONE of the validity checks were successful."""
         return any(
             [
                 self._regex_result,
@@ -55,80 +62,78 @@ class DomainValidator:
                 self._spf_results,
                 self._nslookup_results,
                 self._whois_results,
-            ]
+            ],
         )
 
     @staticmethod
-    def get_domain_tld(domain_name: str):
-        return get_tld(f"https://{domain_name}", fail_silently=True)
+    def get_domain_tld(domain_name: str) -> str | Result | None:
+        """Get the TLD of a domain name."""
+        return get_tld(url=f"https://{domain_name}", fail_silently=True)
 
     @staticmethod
-    def _http_validator(domain_name) -> bool:
+    def _http_validator(domain_name: str) -> bool:
         try:
-            requests.get(f"http://{domain_name}")
-            return True
-        except ConnectionError:
+            requests.get(url=f"http://{domain_name}", timeout=5)
+        except RequestsConnectionError:
             return False
+        else:
+            return True
 
     @staticmethod
-    def _https_validator(domain_name) -> bool:
+    def _https_validator(domain_name: str) -> bool:
         try:
-            requests.get(f"https://{domain_name}")
-            return True
-        except ConnectionError:
+            requests.get(url=f"https://{domain_name}", timeout=5)
+        except RequestsConnectionError:
             return False
+        else:
+            return True
 
     def _regex_validator(self) -> None:
-        """
-        Validates domain by regex and checks that the domain's TLD is one of the known and valid ones.
+        """Validate domain by regex and check that the domain's TLD is one of the known and valid ones.
+
         The "is_tld" function from the tld package uses a list of known TLDs which can be found here:
-        https://github.com/barseghyanartur/tld/blob/b4a741f9abbd0aca472ac33badb0b08752e48b67/src/tld/res/effective_tld_names.dat.txt
+        https://github.com/barseghyanartur/tld/blob/b4a741f9abbd0aca472ac33badb0b08752e48b67/src/tld/res/effective_tld_names.dat.txt.
         """
         if not self._domain_tld:
             return
 
-        if self._domain_regex.fullmatch(self._domain_name) and is_tld(self._domain_tld):
+        if self._domain_regex.fullmatch(string=self._domain_name) and is_tld(value=self._domain_tld):
             self._regex_result = True
 
     def _web_validator(self) -> None:
-        """Simple HTTP and HTTPs connectivity checks."""
-        if self._http_validator(self._domain_name):
+        """Perform simple HTTP and HTTPs connectivity checks."""
+        if self._http_validator(domain_name=self._domain_name):
             self._http_result = True
 
-        if self._https_validator(self._domain_name):
+        if self._https_validator(domain_name=self._domain_name):
             self._https_result = True
 
     def _nslookup_validator(self) -> None:
-        """Simple nslookup check, this is used to determine if the domain name translates to an IP address."""
+        """Perform a simple nslookup check to determine if the domain name translates to an IP address."""
         try:
             socket.gethostbyname(self._domain_name)
             self._nslookup_results = True
         except gaierror:
             pass
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(20))
+    @retry(stop=stop_after_attempt(max_attempt_number=3), wait=wait_fixed(wait=20))
     def _whois_validator(self) -> None:
-        """
-        To easily validate if the domain has a valid WHOIS data, we use query IANA's WHOIS service to look for
-        the domain's WHOIS record.
+        """To easily validate if the domain has a valid WHOIS data, we use IANA's WHOIS service.
 
         The Internet Assigned Numbers Authority (IANA) is responsible for maintaining a collection of registries that
         are critical in ensuring global coordination of the DNS root zone, IP addressing, and other Internet protocol
         resources.
         """
-        unavailable_domain_str = (
-            f"You queried for {self._domain_name} but this server does not have\n% any data for "
-            f"{self._domain_name}."
+        unavailable_domain_str: str = (
+            f"You queried for {self._domain_name} but this server does not have\n% any data for {self._domain_name}."
         )
-        response = requests.get(
-            f"https://www.iana.org/whois?q={self._domain_name}"
-        ).text
+        response: str = requests.get(url=f"https://www.iana.org/whois?q={self._domain_name}", timeout=5).text
         if unavailable_domain_str not in response:
             self._whois_results = True
 
     def _dkim_validator(self) -> None:
-        """
-        DKIM are one of the most crucial information while investigating an email sent by an external source.
+        """DKIM are one of the most crucial information while investigating an email sent by an external source.
+
         It allows for validating that integrity and validity of the domain the email had been sent from.
         For extra information about DKIM: https://www.dmarcanalyzer.com/dkim/.
 
@@ -143,8 +148,8 @@ class DomainValidator:
             return
 
         try:
-            results = resolver.resolve(
-                f"{self._dkim_selector}._domainkey.{self._domain_name}", "TXT"
+            results: list[RRset] = resolver.resolve(
+                qname=f"{self._dkim_selector}._domainkey.{self._domain_name}", rdtype="TXT",
             ).response.answer
             for response in results:
                 if "v=DKIM1" in str(response):
@@ -159,15 +164,15 @@ class DomainValidator:
             self._query_common_dkim_selectors()
 
     def _query_common_dkim_selectors(self) -> None:
-        """Queries well known and common list of DKIM-selectors."""
+        """Query well known and common list of DKIM-selectors."""
         for selector in self.default_dkim_selectors:
+            dkim_domain: str = f"{selector}._domainkey.{self._domain_name}"
             try:
-                results = resolver.resolve(
-                    f"{selector}._domainkey.{self._domain_name}", "TXT"
-                ).response.answer
+                results: list[RRset] = resolver.resolve(qname=dkim_domain, rdtype="TXT").response.answer
                 for response in results:
                     if "v=DKIM1" in str(response):
                         self._dkim_results = True
+                        return
             except (
                 resolver.NXDOMAIN,
                 resolver.NoAnswer,
@@ -177,8 +182,8 @@ class DomainValidator:
                 continue
 
     def _spf_validator(self) -> None:
-        """
-        Same as DKIM, spf selectors are used to verify the email domain's integrity and validity.
+        """Verify the email domain's integrity and validity using SPF selectors.
+
         Unlike DKIM, no selectors are needed and we can query the DNS server regularly.
         """
         try:
@@ -194,6 +199,7 @@ class DomainValidator:
             pass
 
     def to_dict(self) -> dict:
+        """Convert the results to a dictionary format."""
         return {
             "regex": self._regex_result,
             "http": self._http_result,
@@ -204,8 +210,8 @@ class DomainValidator:
             "spf": self._spf_results,
         }
 
-    def validate_domain(self):
-        """Main class execution function."""
+    def validate_domain(self) -> None:
+        """Execute the main class validation functions."""
         self._regex_validator()
         self._web_validator()
         self._nslookup_validator()
@@ -214,21 +220,18 @@ class DomainValidator:
         self._spf_validator()
 
 
-def validate_domain(
-    domain_name: str, dkim_selector: str = None, raw_data=False
-) -> Tuple[bool, dict]:
-    """
-    This function is used to allow the users to get the results without handling with the object itself.
+def validate_domain(domain_name: str, dkim_selector: str | None = None, *, raw_data: bool = False) -> bool | dict:
+    """Allow users to get the results without handling the object itself.
+
     :param domain_name: The name of the domain - mandatory.
     :param dkim_selector: A known-in-advance DKIM-selector - optional.
     :param raw_data: Determines the return type.
-    :return: Returns the validity check results in both bool and dictionary formats.
-        If raw_data marked as False, returns a boolean expression as the result.
-        Else, returns a dictionary representation of the validity checks' results.
-    :rtype: bool, dict
+    :return: If raw_data is False, returns a boolean expression as the result.
+             If raw_data is True, returns a dictionary representation of the validity checks' results.
+    :rtype: bool | dict
     """
     dv = DomainValidator(domain_name=domain_name, dkim_selector=dkim_selector)
     dv.validate_domain()
     if not raw_data:
-        return True if dv else False
+        return bool(dv)
     return dv.to_dict()
