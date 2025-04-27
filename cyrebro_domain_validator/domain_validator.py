@@ -143,43 +143,36 @@ class DomainValidator:
         If no DKIM selector is specified (or the known DKIM selector query failed) the package will query the DNS with
         a common list of DKIM-selectors.
         """
-        if not self._dkim_selector:
-            self._query_common_dkim_selectors()
+        # Try with the provided selector first if available
+        if self._dkim_selector and self._check_dkim_selector(selector=self._dkim_selector):
             return
 
+        # Fall back to common selectors
+        self._query_common_dkim_selectors()
+
+    def _check_dkim_selector(self, selector: str) -> bool:
+        """Check if a specific DKIM selector exists and contains valid DKIM record."""
+        dkim_domain: str = f"{selector}._domainkey.{self._domain_name}"
         try:
-            results: list[RRset] = resolver.resolve(
-                qname=f"{self._dkim_selector}._domainkey.{self._domain_name}", rdtype="TXT",
-            ).response.answer
+            results: list[RRset] = resolver.resolve(qname=dkim_domain, rdtype="TXT").response.answer
             for response in results:
                 if "v=DKIM1" in str(response):
                     self._dkim_results = True
-                    return
+                    return True
         except (
             resolver.NXDOMAIN,
             resolver.NoAnswer,
             resolver.NoNameservers,
             resolver.LifetimeTimeout,
         ):
-            self._query_common_dkim_selectors()
+            pass
+        return False
 
     def _query_common_dkim_selectors(self) -> None:
         """Query well known and common list of DKIM-selectors."""
         for selector in self.default_dkim_selectors:
-            dkim_domain: str = f"{selector}._domainkey.{self._domain_name}"
-            try:
-                results: list[RRset] = resolver.resolve(qname=dkim_domain, rdtype="TXT").response.answer
-                for response in results:
-                    if "v=DKIM1" in str(response):
-                        self._dkim_results = True
-                        return
-            except (
-                resolver.NXDOMAIN,
-                resolver.NoAnswer,
-                resolver.NoNameservers,
-                resolver.LifetimeTimeout,
-            ):
-                continue
+            if self._check_dkim_selector(selector):
+                return
 
     def _spf_validator(self) -> None:
         """Verify the email domain's integrity and validity using SPF selectors.
