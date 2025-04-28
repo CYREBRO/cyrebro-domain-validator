@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, ClassVar
 
 import requests
 from dns import resolver
-from dns.rrset import RRset
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from tenacity import retry, stop_after_attempt, wait_fixed
 from tld import Result, get_tld, is_tld
@@ -25,7 +24,7 @@ class DomainValidator:
         pattern=r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9.]$",
     )
 
-    default_dkim_selectors: ClassVar[list[str]] = [
+    default_dkim_selectors: ClassVar[list[str]] = [ # https://docs.astral.sh/ruff/rules/mutable-class-default/
         "google",
         "dkim",
         "mail",
@@ -71,7 +70,7 @@ class DomainValidator:
         return get_tld(url=f"https://{domain_name}", fail_silently=True)
 
     @staticmethod
-    def _http_validator(domain_name: str) -> bool:
+    def _http_validator(domain_name: str) -> bool: # https://docs.astral.sh/ruff/rules/try-consider-else/
         try:
             requests.get(url=f"http://{domain_name}", timeout=5)
         except RequestsConnectionError:
